@@ -11,7 +11,7 @@ if(motor_only)
             "tasks/control/motion_task.cpp"
             "tasks/control/motor_debug_console.cpp"
         INCLUDE_DIRS "." "config" "core" "platform" "control" "msg" "tasks/control"
-        REQUIRES motor_driver encoder_driver pid_controller nvs_flash console
+        REQUIRES motor_driver encoder_driver pid_controller nvs_flash console esp_timer
                  esp_driver_uart esp_driver_usb_serial_jtag vfs
     )
     target_compile_definitions(${COMPONENT_LIB} PUBLIC APP_MOTOR_ONLY=1)
@@ -69,6 +69,7 @@ idf_component_register(
         servo_driver
         lsm6ds3_driver
         pid_controller
+        esp_timer
         camsense_lidar
         status_led
         battery_adc

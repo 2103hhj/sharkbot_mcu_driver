@@ -78,13 +78,16 @@ QueueHandle_t q_motion_cmd = nullptr;
 QueueHandle_t q_servo_cmd = nullptr;
 #endif
 QueueHandle_t q_speedpid_cmd = nullptr;
+#if APP_MOTOR_ONLY
+QueueHandle_t q_motor_pid_cmd = nullptr;
+QueueHandle_t q_motor_pid_state = nullptr;
+QueueHandle_t q_motor_start_timing = nullptr;
+#endif
 QueueHandle_t q_postionpid_cmd = nullptr;
 
-PidMsg g_speed_pid_state = {
-    .kp = 1.0f,
-    .ki = 6.0f,
-    .kd = 0.0f,
-};
+// Legacy full-firmware interfaces expose one common PID; motor-only startup uses
+// independent defaults directly and does not send this value to both wheels.
+PidMsg g_speed_pid_state = kDefaultLeftMotorSpeedPid;
 
 PidMsg g_position_pid_state = {
     .kp = 2.1f,

@@ -14,7 +14,7 @@ enum MotionCmdSource : uint8_t {
 
 struct MotionMsg {
     uint8_t source = MOTION_SRC_NONE;
-    uint8_t control_mode = 0; // 0速度, 1位置
+    uint8_t control_mode = 0; // 0底盘速度, 1位置, 6双轮速度, 7开环占空比
 
     // 当前状态
     float vx = 0.0f, vy = 0.0f, wz = 0.0f;
@@ -32,4 +32,6 @@ struct MotionMsg {
 
     float vel_left = 0.0f;
     float vel_right = 0.0f;
+    float duty_left = 0.0f, duty_right = 0.0f; // 开环指令/实际量化占空比，-100..100 %
+    float omega_left = 0.0f, omega_right = 0.0f; // 未滤波轮轴角速度，rad/s
 };

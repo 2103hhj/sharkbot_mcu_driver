@@ -4,8 +4,9 @@
 #include "motor_driver.h"
 #include "encoder_driver.h"
 #include "pid_controller.h"
+#include "motor_start_timing.h"
 
-enum class ControlMode { kVelocity, kPosition, kRelativeSeq };
+enum class ControlMode { kVelocity, kPosition, kRelativeSeq, kOpenLoop };
 enum class SeqState { kIdle, kForward, kSettle, kTurn };
 
 enum class MotorID {
@@ -35,15 +36,26 @@ class MotionController {
   void SetAllMotorTargetsVelocity(float left_mms, float right_mms);
   float GetMotorVelocity(MotorID motor_id) const;
   void GetAllMotorVelocities(float* left_mms, float* right_mms) const;
+  // Signed duty in percent; zero coasts. Stop() actively brakes and exits open loop.
+  void SetAllMotorDuties(float left_percent, float right_percent);
+  void GetAllMotorDuties(float* left_percent, float* right_percent) const;
+  // Raw encoder wheel angular velocities in rad/s (before the speed low-pass filter).
+  void GetAllMotorAngularVelocities(float* left_rads, float* right_rads) const;
 
   void Drive(float linear_x, float linear_y, float angular_z);
   void GetVelocity(float* linear_x, float* linear_y, float* angular_z) const;
   void SetVelocityPidGains(float kp, float ki, float kd);
+  // Retuning one wheel resets only that wheel's PID history.
+  void SetMotorVelocityPidGains(MotorID motor_id, float kp, float ki, float kd);
+  void BeginMotorStartTiming();
+  void EndMotorStartTiming() { start_timing_.End(); }
+  MotorStartTiming GetMotorStartTiming() const { return start_timing_; }
   void Update(float dt, float current_imu_yaw_rad);
   void Stop();
 
  private:
   void CalculateKinematics(float linear_x, float linear_y, float angular_z);
+  void WriteMotorSpeed(int wheel, int16_t pwm);
   static float NormalizeAngle(float angle);
 
   static constexpr int kNumWheels = 2;
@@ -55,6 +67,9 @@ class MotionController {
   float final_target_vel_[kNumWheels] = {0};
   int32_t last_count_[kNumWheels] = {0};
   float filtered_rpm_[kNumWheels] = {0};
+  float angular_velocity_[kNumWheels] = {0};
+  int16_t open_loop_pwm_[kNumWheels] = {0};
+  MotorStartTiming start_timing_ = {};
 
   ControlMode control_mode_ = ControlMode::kVelocity;
 

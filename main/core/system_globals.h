@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "msg/pid_msg.h"
+#include "msg/motor_pid_msg.h"
 
 #if !APP_MOTOR_ONLY
 enum class WifiCommMode : uint8_t {
@@ -58,6 +59,11 @@ extern QueueHandle_t q_motion_cmd;
 extern QueueHandle_t q_servo_cmd;
 #endif
 extern QueueHandle_t q_speedpid_cmd;
+#if APP_MOTOR_ONLY
+extern QueueHandle_t q_motor_pid_cmd;
+extern QueueHandle_t q_motor_pid_state;
+extern QueueHandle_t q_motor_start_timing;
+#endif
 extern QueueHandle_t q_postionpid_cmd;
 
 extern PidMsg g_speed_pid_state;

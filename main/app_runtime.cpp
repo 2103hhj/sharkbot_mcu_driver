@@ -8,7 +8,6 @@
 #include "motor_debug_console.h"
 #include "msg/motion_msg.h"
 #include "nvs_flash.h"
-#include "pid_config.h"
 #include "system_globals.h"
 
 void app_runtime_startup(void) {
@@ -21,21 +20,20 @@ void app_runtime_startup(void) {
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
-    PidMsg saved = g_speed_pid_state;
-    err = pid_load_speed_config(&saved);
-    if (err == ESP_OK) g_speed_pid_state = saved;
-    else if (err != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGW("MOTOR_APP", "PID load failed, using defaults: %s", esp_err_to_name(err));
-    }
+    // Each controller is constructed from its own defaults in motor_pid_msg.h.
+    // Do not restore or queue a common PID here: it would overwrite one side's defaults.
 
     board_init();
     q_motion_state = xQueueCreate(1, sizeof(MotionMsg));
     q_motion_cmd = xQueueCreate(1, sizeof(MotionMsg));
     q_speedpid_cmd = xQueueCreate(1, sizeof(PidMsg));
+    q_motor_pid_cmd = xQueueCreate(kMotorPidCommandQueueLength, sizeof(MotorPidCommand));
+    q_motor_pid_state = xQueueCreate(1, sizeof(MotorPidState));
+    q_motor_start_timing = xQueueCreate(1, sizeof(MotorStartTiming));
     q_postionpid_cmd = xQueueCreate(1, sizeof(PidMsg));
-    ESP_ERROR_CHECK(q_motion_state && q_motion_cmd && q_speedpid_cmd && q_postionpid_cmd
+    ESP_ERROR_CHECK(q_motion_state && q_motion_cmd && q_speedpid_cmd && q_postionpid_cmd &&
+                    q_motor_pid_cmd && q_motor_pid_state && q_motor_start_timing
                         ? ESP_OK : ESP_ERR_NO_MEM);
-    xQueueOverwrite(q_speedpid_cmd, &g_speed_pid_state);
     ESP_ERROR_CHECK(xTaskCreate(motion_task, "motion", 4096, nullptr, 5, nullptr) == pdPASS
                         ? ESP_OK : ESP_ERR_NO_MEM);
     motor_debug_console_start();

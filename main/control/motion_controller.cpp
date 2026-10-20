@@ -1,7 +1,9 @@
 // Copyright 2026. All rights reserved.
 
 #include "motion_controller.h"
+#include "motor_pid_msg.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include <algorithm>
 #include <cmath>
 
@@ -16,7 +18,7 @@ static const float kLy = kTrackWidth / 2.0f;
 static const float kRpmToMms = (M_PI * kWheelDiameter) / 60.0f; 
 static const float kMmsToRpm = 1.0f / kRpmToMms;
 
-static const float kKp = 1.0f, kKi = 6.0f, kKd = 0.0f, kMaxPwm = 255.0f;
+static const float kMaxPwm = 255.0f;
 static const float kMaxPosVel = 250.0f;   
 static const float kMaxPosYaw = 3.0f;     
 static const int kRelativeTurnSettleMaxCycles = 5;
@@ -42,8 +44,12 @@ MotionController::MotionController(
     : motors_{&left_motor, &right_motor},
       encs_{&left_encoder, &right_encoder},
       pid_vel_{
-        PidController(PidMode::kIncremental, kKp, kKi, kKd, -kMaxPwm, kMaxPwm),
-        PidController(PidMode::kIncremental, kKp, kKi, kKd, -kMaxPwm, kMaxPwm)
+        PidController(PidMode::kIncremental,
+                      kDefaultLeftMotorSpeedPid.kp, kDefaultLeftMotorSpeedPid.ki,
+                      kDefaultLeftMotorSpeedPid.kd, -kMaxPwm, kMaxPwm),
+        PidController(PidMode::kIncremental,
+                      kDefaultRightMotorSpeedPid.kp, kDefaultRightMotorSpeedPid.ki,
+                      kDefaultRightMotorSpeedPid.kd, -kMaxPwm, kMaxPwm)
       },
       pid_pos_x_(PidMode::kPositional, 2.1f, 0.0f, 0.5f, -kMaxPosVel, kMaxPosVel),
       pid_pos_y_(PidMode::kPositional, 2.1f, 0.0f, 0.5f, -kMaxPosVel, kMaxPosVel),
@@ -102,6 +108,7 @@ void MotionController::ResetOdometry() {
       encs_[i]->ResetCount();
       last_count_[i] = 0;
       filtered_rpm_[i] = 0.0f;
+      angular_velocity_[i] = 0.0f;
       pid_vel_[i].Reset();
       final_target_vel_[i] = 0.0f;
       target_vel_[i] = 0.0f;
@@ -142,7 +149,8 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
   if (dt <= 0.0f) return;
 
   // 1. 读取并计算转速
-  const float kAlpha = 0.35f;
+  // Preserve the original 20 ms / alpha=0.35 filter response as dt changes.
+  const float kAlpha = 1.0f - std::pow(0.65f, dt / 0.02f);
   const float kPulsesPerRev = 4680.0f; 
   // 按左右轮顺序修正编码器方向：左轮取反，右轮保持原始计数。
   // 此处是反馈方向，电机输出极性在 board.cpp 中单独处理。
@@ -150,9 +158,14 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
 
   for (int i = 0; i < kNumWheels; ++i) {
     int32_t current_count = encs_[i]->GetCount() * sign[i];
-    float pps = (current_count - last_count_[i]) / dt;
+    const int32_t delta_count = current_count - last_count_[i];
+    if (start_timing_.recording) {
+      start_timing_.RecordEncoder(i, delta_count, esp_timer_get_time());
+    }
+    float pps = delta_count / dt;
     last_count_[i] = current_count;
     float raw_rpm = (pps / kPulsesPerRev) * 60.0f;
+    angular_velocity_[i] = (pps / kPulsesPerRev) * (2.0f * M_PI);
     filtered_rpm_[i] = kAlpha * raw_rpm + (1.0f - kAlpha) * filtered_rpm_[i];
   }
 
@@ -178,6 +191,15 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
 // ESP_LOGI(TAG,
 //          "local_vx=%.6f, local_vy=%.6f, local_vw=%.6f, yaw=%.6f, pos_y=%.6f",
 //          local_vx, local_vy, local_vw, odom_yaw_, pos_y_);
+  // Open-loop identification still updates encoder feedback and odometry, but
+  // bypasses every feedback controller, acceleration ramp and deadband offset.
+  if (control_mode_ == ControlMode::kOpenLoop) {
+    for (int i = 0; i < kNumWheels; ++i) {
+      WriteMotorSpeed(i, open_loop_pwm_[i]);
+    }
+    return;
+  }
+
   // 3. 执行外环控制逻辑
   if (control_mode_ == ControlMode::kPosition) {
     float dx = target_pos_x_ - pos_x_;
@@ -253,6 +275,7 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
       target_vel_[i] = 0.0f;
       final_target_vel_[i] = 0.0f;
       pid_vel_[i].Reset();
+      open_loop_pwm_[i] = 0;
       motors_[i]->Brake();
     }
     return;
@@ -280,7 +303,7 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
                (int)control_mode_, pos_x_, pos_y_, odom_yaw_, final_pwm);
     }
 #endif
-    motors_[i]->SetSpeed(final_pwm);
+    WriteMotorSpeed(i, final_pwm);
   }
 }
 
@@ -298,15 +321,31 @@ void MotionController::GetVelocity(float* linear_x, float* linear_y, float* angu
 }
 
 void MotionController::Stop() {
+  start_timing_.End();
   control_mode_ = ControlMode::kVelocity; 
   for(int i = 0; i < kNumWheels; ++i) {
       target_vel_[i] = 0.0f;
       final_target_vel_[i] = 0.0f;
+      open_loop_pwm_[i] = 0;
       pid_vel_[i].Reset();
       motors_[i]->Brake();
   }
   pid_pos_x_.Reset(); pid_pos_y_.Reset(); pid_pos_yaw_.Reset();
   seq_state_ = SeqState::kIdle; 
+}
+
+void MotionController::BeginMotorStartTiming() {
+  start_timing_.Begin(esp_timer_get_time());
+}
+
+void MotionController::WriteMotorSpeed(int wheel, int16_t pwm) {
+  if (!start_timing_.recording) {
+    motors_[wheel]->SetSpeed(pwm);
+    return;
+  }
+  const int64_t begin_us = esp_timer_get_time();
+  motors_[wheel]->SetSpeed(pwm);
+  start_timing_.RecordPwm(wheel, pwm, begin_us, esp_timer_get_time());
 }
 
 void MotionController::SetVelocityPidGains(float kp, float ki, float kd) {
@@ -315,16 +354,23 @@ void MotionController::SetVelocityPidGains(float kp, float ki, float kd) {
   }
 }
 
+void MotionController::SetMotorVelocityPidGains(MotorID motor_id, float kp, float ki, float kd) {
+  const int index = static_cast<int>(motor_id);
+  if (index < 0 || index >= kNumWheels) return;
+  pid_vel_[index].SetGains(kp, ki, kd);
+}
+
 void MotionController::SetPositionPidGains(float kp, float ki, float kd) {
   pid_pos_x_.SetGains(kp, ki, kd); pid_pos_y_.SetGains(kp, ki, kd); pid_pos_yaw_.SetGains(kp, ki, kd);
 }
 
 void MotionController::SetMotorTargetVelocity(MotorID motor_id, float target_mms) {
-  control_mode_ = ControlMode::kVelocity; 
   const int motor_index = static_cast<int>(motor_id);
   if (motor_index < 0 || motor_index >= kNumWheels) {
     return;
   }
+  if (control_mode_ == ControlMode::kOpenLoop) Stop();
+  control_mode_ = ControlMode::kVelocity;
   final_target_vel_[motor_index] = target_mms * kMmsToRpm;
   if (IsNearZero(target_mms)) {
     target_vel_[motor_index] = 0.0f;
@@ -355,4 +401,29 @@ float MotionController::GetMotorVelocity(MotorID motor_id) const {
 void MotionController::GetAllMotorVelocities(float* left_mms, float* right_mms) const {
   if (left_mms) *left_mms = filtered_rpm_[0] * kRpmToMms;
   if (right_mms) *right_mms = filtered_rpm_[1] * kRpmToMms;
+}
+
+void MotionController::SetAllMotorDuties(float left_percent, float right_percent) {
+  if (!std::isfinite(left_percent) || !std::isfinite(right_percent)) {
+    Stop();
+    return;
+  }
+  if (control_mode_ != ControlMode::kOpenLoop) Stop();
+  const float duty[kNumWheels] = {left_percent, right_percent};
+  for (int i = 0; i < kNumWheels; ++i) {
+    open_loop_pwm_[i] = static_cast<int16_t>(
+        std::lround(std::clamp(duty[i], -100.0f, 100.0f) * kMaxPwm / 100.0f));
+  }
+  control_mode_ = ControlMode::kOpenLoop;
+}
+
+void MotionController::GetAllMotorDuties(float* left_percent, float* right_percent) const {
+  const bool open_loop = control_mode_ == ControlMode::kOpenLoop;
+  if (left_percent) *left_percent = open_loop ? open_loop_pwm_[0] * 100.0f / kMaxPwm : 0.0f;
+  if (right_percent) *right_percent = open_loop ? open_loop_pwm_[1] * 100.0f / kMaxPwm : 0.0f;
+}
+
+void MotionController::GetAllMotorAngularVelocities(float* left_rads, float* right_rads) const {
+  if (left_rads) *left_rads = angular_velocity_[0];
+  if (right_rads) *right_rads = angular_velocity_[1];
 }

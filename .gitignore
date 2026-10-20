@@ -26,6 +26,8 @@ Thumbs.db
 # Local configuration
 /sdkconfig
 /sdkconfig.old
+/tests/motion_controller/sdkconfig
+/tests/motion_controller/sdkconfig.old
 
 # Dependency backup
 /dependencies.lock.bak
