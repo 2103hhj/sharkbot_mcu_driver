@@ -1,3 +1,24 @@
+idf_build_get_property(motor_only SHARKBOT_MOTOR_ONLY)
+if(motor_only)
+    idf_component_register(
+        SRCS
+            "app_main.cpp"
+            "app_runtime.cpp"
+            "config/pid_config.cpp"
+            "core/system_globals.cpp"
+            "platform/board.cpp"
+            "control/motion_controller.cpp"
+            "tasks/control/motion_task.cpp"
+            "tasks/control/motor_debug_console.cpp"
+        INCLUDE_DIRS "." "config" "core" "platform" "control" "msg" "tasks/control"
+        REQUIRES motor_driver encoder_driver pid_controller nvs_flash console
+                 esp_driver_uart esp_driver_usb_serial_jtag vfs
+    )
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC APP_MOTOR_ONLY=1)
+    return()
+endif()
+
+# Original full firmware: temporarily disabled by SHARKBOT_MOTOR_ONLY (default ON).
 set(APP_SRCS
     "app_main.cpp"
     "app_runtime.cpp"
@@ -56,3 +77,4 @@ idf_component_register(
         mavlink_lib
         micro_ros_espidf_component
 )
+target_compile_definitions(${COMPONENT_LIB} PUBLIC APP_MOTOR_ONLY=0)

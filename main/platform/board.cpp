@@ -28,6 +28,7 @@ const gpio_num_t kEncoderLeftB = GPIO_NUM_17;
 const gpio_num_t kEncoderRightA = GPIO_NUM_11;
 const gpio_num_t kEncoderRightB = GPIO_NUM_10;
 
+#if !APP_MOTOR_ONLY
 const gpio_num_t kUltrasonicTrigPin = GPIO_NUM_21;
 const gpio_num_t kUltrasonicEchoPin = GPIO_NUM_47;
 const gpio_num_t kStatusLedPin = GPIO_NUM_14;
@@ -38,9 +39,12 @@ const adc_channel_t kBatteryAdcChannel = ADC_CHANNEL_2; // GPIO3 on ESP32-S3.
 // GPIO0/BOOT is a strapping/download pin. Using it as a runtime button is risky,
 // but it is enabled here intentionally for the BOOT long-press recovery action.
 const gpio_num_t kIo0ButtonPin = GPIO_NUM_0;
+#endif
 
 // ================= 对象实例化 =================
+#if !APP_MOTOR_ONLY
 Lsm6ds3Imu imu(I2C_NUM_0, GPIO_NUM_12, GPIO_NUM_13);
+#endif
 
 At8236Motor motor_left(kMotorLeftIn1, kMotorLeftIn2);
 At8236Motor motor_right(kMotorRightIn1, kMotorRightIn2);
@@ -49,11 +53,13 @@ QuadratureEncoder encoder_left(kEncoderLeftA, kEncoderLeftB);
 QuadratureEncoder encoder_right(kEncoderRightA, kEncoderRightB);
 
 MotionController robot(motor_left, motor_right, encoder_left, encoder_right);
+#if !APP_MOTOR_ONLY
 UltrasonicSensor ultrasonic(kUltrasonicTrigPin, kUltrasonicEchoPin);
 StatusLed status_led(kStatusLedPin);
 ButtonDriver io0_button(kIo0ButtonPin, true);
 ServoDriver my_servo(kServoPin);
 BatteryAdc battery_adc(kBatteryAdcUnit, kBatteryAdcChannel);
+#endif
 
 // ================= 统一初始化逻辑 =================
 void board_init(void) {
@@ -64,6 +70,8 @@ void board_init(void) {
     motor_right.Init();
     encoder_right.Init();
 
+    robot.Stop(); // 上电保持停止，等待明确的运动指令。
+#if !APP_MOTOR_ONLY
     ultrasonic.Init();
     status_led.Init();
     io0_button.Init();
@@ -75,6 +83,7 @@ void board_init(void) {
     } else {
         ESP_LOGE(TAG, "IMU initialization failed.");
     }
+#endif
 
     ESP_LOGI(TAG, "Two-wheel differential board ready.");
 }

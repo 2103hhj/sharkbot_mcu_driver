@@ -7,7 +7,9 @@ extern "C" {
 #endif
 
 void app_runtime_startup(void);
+#if !APP_MOTOR_ONLY
 void app_runtime_restart_after_delay_ms(uint32_t delay_ms);
+#endif
 
 #ifdef __cplusplus
 }

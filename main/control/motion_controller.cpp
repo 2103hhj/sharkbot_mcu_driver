@@ -6,7 +6,9 @@
 #include <cmath>
 
 #define DEBUG_PID 0
+#if DEBUG_PID
 static const char* TAG = "PID_CTRL";
+#endif
 
 static const float kWheelDiameter = 65.0f; 
 static const float kTrackWidth = 175.0f;   //131.7f   
@@ -160,13 +162,15 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
   float step_dist = std::sqrt(local_vx * local_vx + local_vy * local_vy) * dt;
   total_distance_ += step_dist;
 
-  if (need_reset_yaw_offset_) {
+  odom_yaw_ += local_vw * dt;
+  odom_yaw_ = NormalizeAngle(odom_yaw_);
+  if (need_reset_yaw_offset_ && std::isfinite(current_imu_yaw_rad)) {
       yaw_offset_ = current_imu_yaw_rad;
       need_reset_yaw_offset_ = false;
   }
-  imu_yaw_rel_ = NormalizeAngle(current_imu_yaw_rad - yaw_offset_);
-  odom_yaw_ += local_vw * dt;
-  odom_yaw_ = NormalizeAngle(odom_yaw_);
+  imu_yaw_rel_ = std::isfinite(current_imu_yaw_rad)
+                     ? NormalizeAngle(current_imu_yaw_rad - yaw_offset_)
+                     : odom_yaw_;
   pos_x_ += (local_vx * std::cos(odom_yaw_) - local_vy * std::sin(odom_yaw_)) * dt;
   pos_y_ += (local_vx * std::sin(odom_yaw_) + local_vy * std::cos(odom_yaw_)) * dt;
 // ESP_LOGI(TAG,

@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Motor: Build (Windows)",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/idf.ps1", "-Action", "build"],
+            "group": {"kind": "build", "isDefault": true},
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Motor: Flash (Windows)",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/idf.ps1", "-Action", "flash", "-Port", "${input:serialPort}"],
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Motor: Monitor (Windows)",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/idf.ps1", "-Action", "monitor", "-Port", "${input:serialPort}"],
+            "isBackground": true,
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {"id": "serialPort", "type": "promptString", "description": "ESP32 serial port (Windows Device Manager)", "default": "COM5"}
+    ]
+}

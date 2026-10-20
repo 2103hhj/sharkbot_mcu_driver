@@ -2,6 +2,7 @@
 
 volatile bool g_emergency_stop = false;
 volatile bool g_motion_busy = false;
+#if !APP_MOTOR_ONLY
 volatile uint32_t g_lidar_scan_sequence = 0;
 volatile WifiCommMode g_wifi_comm_mode = WifiCommMode::kMicroRos;
 char g_microros_agent_ip[16] = "192.168.31.214";
@@ -61,16 +62,21 @@ const char *wifi_comm_mode_to_display_name(WifiCommMode mode) {
 }
 
 QueueHandle_t q_imu_state = nullptr;
+#endif
 QueueHandle_t q_motion_state = nullptr;
+#if !APP_MOTOR_ONLY
 QueueHandle_t q_ultrasonic_state = nullptr;
 QueueHandle_t q_lidar_state = nullptr;   
 QueueHandle_t q_gamepad_state = nullptr;
 QueueHandle_t q_temperature_state = nullptr;
 QueueHandle_t q_battery_state = nullptr;
+#endif
 
 
 QueueHandle_t q_motion_cmd = nullptr;
+#if !APP_MOTOR_ONLY
 QueueHandle_t q_servo_cmd = nullptr;
+#endif
 QueueHandle_t q_speedpid_cmd = nullptr;
 QueueHandle_t q_postionpid_cmd = nullptr;
 

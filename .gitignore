@@ -1,4 +1,5 @@
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 .idea/
 .codex/
 .agents/

@@ -2,7 +2,12 @@
 #include "board.h" 
 #include "msg/motion_msg.h"
 #include "msg/pid_msg.h"
-#include "msg/imu_msg.h"  
+#if !APP_MOTOR_ONLY
+#include "msg/imu_msg.h"
+#else
+#include "motor_debug_console.h"
+#endif
+#include "freertos/task.h"
 #include "esp_log.h"
 #include <cmath>          
 
@@ -16,17 +21,29 @@ void motion_task(void *p) {
     PidMsg speed_msg;
     PidMsg position_msg;
     
-    ImuMsg imu_msg = {}; 
+#if !APP_MOTOR_ONLY
+    ImuMsg imu_msg = {};
+#else
+    TickType_t last_command_tick = 0;
+    bool command_active = false;
+#endif
+    TickType_t next_wake = xTaskGetTickCount();
 
     int current_mode = 0;
     
     while (1) {
+#if !APP_MOTOR_ONLY
         xQueuePeek(q_imu_state, &imu_msg, 0);
+#endif
                  
         // 1. 接收底层运动指令 (指令状态机)
         if (xQueueReceive(q_motion_cmd, &incoming_msg, 0) == pdTRUE) { 
             cmd_msg = incoming_msg;
             current_mode = cmd_msg.control_mode; // 记录最新模式
+#if APP_MOTOR_ONLY
+            last_command_tick = xTaskGetTickCount();
+            command_active = true;
+#endif
 
             // 处理离散单次触发模式
             if (current_mode == 0) {
@@ -63,12 +80,26 @@ void motion_task(void *p) {
                      position_msg.kp, position_msg.ki, position_msg.kd);
         }
 
+        // 串口断开或停止发送运动指令后，不保持旧的电机目标。
+#if APP_MOTOR_ONLY
+        if (command_active && (xTaskGetTickCount() - last_command_tick >=
+                               pdMS_TO_TICKS(kMotorCommandTimeoutMs))) {
+            robot.Stop();
+            g_motion_busy = false;
+            command_active = false;
+            ESP_LOGW(TAG, "Motion command timed out; motors stopped");
+        }
+#endif
         // 4. 执行物理控制循环
         if (g_emergency_stop) {
             robot.Stop();
             g_motion_busy = false;
         } else {
-            float imu_yaw_rad = imu_msg.yaw * (M_PI / 180.0f); 
+#if !APP_MOTOR_ONLY
+            float imu_yaw_rad = imu_msg.yaw * (M_PI / 180.0f);
+#else
+            const float imu_yaw_rad = NAN; // 无 IMU 时从编码器里程计取得航向。
+#endif
             robot.Update(dt, imu_yaw_rad);
             if (current_mode == 2 && !robot.IsBusy()) {
                 g_motion_busy = false;
@@ -88,6 +119,6 @@ void motion_task(void *p) {
         
         xQueueOverwrite(q_motion_state, &status_msg);
         
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelayUntil(&next_wake, pdMS_TO_TICKS(20));
     }
 }
