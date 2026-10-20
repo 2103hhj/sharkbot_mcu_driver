@@ -1,0 +1,38 @@
+.vscode/
+.idea/
+.codex/
+.agents/
+
+build/
+sdkconfig.old
+*.log
+
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+
+# ESP-IDF build
+/build/
+/build_*/
+/build_linux_backup_*/
+**/build/
+
+# ESP-IDF managed components
+/managed_components/
+
+# Local configuration
+/sdkconfig
+/sdkconfig.old
+
+# Dependency backup
+/dependencies.lock.bak
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local environment
+.env
+.env.*
