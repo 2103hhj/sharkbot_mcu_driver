@@ -1,6 +1,6 @@
 #include "motor_driver.h"
 
-// 静态变量分配唯一的 LEDC 通道，S3 有 8 个通道 (LEDC_CHANNEL_0 ~ LEDC_CHANNEL_7)
+// 为两个电机的四个输入分配独立 LEDC 通道，统一使用低速模式。
 static ledc_channel_t next_ledc_channel = LEDC_CHANNEL_0;
 static bool is_ledc_timer_init = false;
 
@@ -21,7 +21,7 @@ void At8236Motor::Init() {
   if (!usable_) {
     return;
   }
-  // 只初始化一次定时器 (频率 5000Hz, 8位分辨率 0-255)
+  // 只初始化一次定时器 (频率 20000Hz, 8位分辨率 0-255)
   if (!is_ledc_timer_init) {
     ledc_timer_config_t ledc_timer = {};
     ledc_timer.speed_mode      = LEDC_LOW_SPEED_MODE;

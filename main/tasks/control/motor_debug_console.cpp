@@ -142,6 +142,7 @@ void command_task(void *) {
             continue;
         }
         if (ch == '\r' || ch == '\n') {
+            // CRLF executes on CR; the following LF is an empty line and is ignored.
             if (!overflow && length > 0) {
                 line[length] = '\0';
                 int result = 0;
@@ -211,7 +212,7 @@ void motor_debug_console_start() {
         const char *help;
         esp_console_cmd_func_t handler;
     } commands[] = {
-        {"motor", "Set left/right wheel speed in mm/s (-500..500), timeout 2s", set_motors},
+        {"motor", "Set left/right wheel speed in mm/s (-500..500), timeout 10s", set_motors},
         {"stop", "Stop both motors", stop_motors},
         {"status", "Show measured wheel speed and encoder odometry", show_status},
         {"pid", "Set speed PID kp ki kd (0..1000, RAM only)", set_pid},

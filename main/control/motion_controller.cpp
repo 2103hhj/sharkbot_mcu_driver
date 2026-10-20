@@ -144,7 +144,9 @@ void MotionController::Update(float dt, float current_imu_yaw_rad) {
   // 1. 读取并计算转速
   const float kAlpha = 0.35f;
   const float kPulsesPerRev = 4680.0f; 
-  const int sign[kNumWheels] = {-1, 1}; // 右侧轮反向读取
+  // 按左右轮顺序修正编码器方向：左轮取反，右轮保持原始计数。
+  // 此处是反馈方向，电机输出极性在 board.cpp 中单独处理。
+  const int sign[kNumWheels] = {-1, 1};
 
   for (int i = 0; i < kNumWheels; ++i) {
     int32_t current_count = encs_[i]->GetCount() * sign[i];

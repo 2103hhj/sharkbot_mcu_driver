@@ -2,7 +2,7 @@ param(
     [ValidateSet('build', 'flash', 'monitor', 'menuconfig', 'reconfigure', 'size')]
     [string]$Action = 'build',
     [string]$Port,
-    [string]$BuildDir = 'build_windows',
+    [string]$BuildDir = 'build_windows_esp32',
     [string]$ToolsPath = $env:IDF_TOOLS_PATH
 )
 
@@ -51,7 +51,7 @@ if (-not (Test-Path -LiteralPath $idfPython) -or -not (Test-Path -LiteralPath $i
 if ($Action -in @('flash', 'monitor') -and -not $Port) {
     throw 'Specify the ESP32 serial port, for example -Port COM5.'
 }
-$idfArgs = @('-C', $projectRoot, '-B', $BuildDir)
+$idfArgs = @('-C', $projectRoot, '-B', $BuildDir, '-D', 'IDF_TARGET=esp32')
 if ($Port) { $idfArgs += @('-p', $Port) }
 $idfArgs += $Action
 & $idfPython $idfEntry @idfArgs

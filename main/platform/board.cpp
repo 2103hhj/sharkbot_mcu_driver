@@ -5,28 +5,21 @@
 static const char *TAG = "BOARD_INIT";
 
 // ================= 引脚定义 (私有) =================
-// const gpio_num_t kMotorLeftIn1 = GPIO_NUM_46;
-// const gpio_num_t kMotorLeftIn2 = GPIO_NUM_9;
-// const gpio_num_t kMotorRightIn1 = GPIO_NUM_16;
-// const gpio_num_t kMotorRightIn2 = GPIO_NUM_15;
+// MOTOR1：左电机
+const gpio_num_t kMotorLeftIn1 = GPIO_NUM_23;
+const gpio_num_t kMotorLeftIn2 = GPIO_NUM_22;
 
-// const gpio_num_t kEncoderLeftA = GPIO_NUM_10;
-// const gpio_num_t kEncoderLeftB = GPIO_NUM_11;
-// const gpio_num_t kEncoderRightA = GPIO_NUM_17;
-// const gpio_num_t kEncoderRightB = GPIO_NUM_18;
-const gpio_num_t kMotorLeftIn1 = GPIO_NUM_16;
-const gpio_num_t kMotorLeftIn2 = GPIO_NUM_15;
-const gpio_num_t kMotorRightIn1 = GPIO_NUM_46;
-const gpio_num_t kMotorRightIn2 = GPIO_NUM_9;
+// MOTOR2：右电机（GPIO12 为 ESP32 启动配置引脚，接线须符合模块启动电平要求）
+const gpio_num_t kMotorRightIn1 = GPIO_NUM_12;
+const gpio_num_t kMotorRightIn2 = GPIO_NUM_13;
 
-// const gpio_num_t kEncoderLeftA = GPIO_NUM_17;
-// const gpio_num_t kEncoderLeftB = GPIO_NUM_18;
-// const gpio_num_t kEncoderRightA = GPIO_NUM_10;
-// const gpio_num_t kEncoderRightB = GPIO_NUM_11;
-const gpio_num_t kEncoderLeftA = GPIO_NUM_18;
-const gpio_num_t kEncoderLeftB = GPIO_NUM_17;
-const gpio_num_t kEncoderRightA = GPIO_NUM_11;
-const gpio_num_t kEncoderRightB = GPIO_NUM_10;
+// MOTOR1 编码器：接口第3脚、第4脚
+const gpio_num_t kEncoderLeftA = GPIO_NUM_32;
+const gpio_num_t kEncoderLeftB = GPIO_NUM_33;
+
+// MOTOR2 编码器：接口第3脚、第4脚
+const gpio_num_t kEncoderRightA = GPIO_NUM_25;
+const gpio_num_t kEncoderRightB = GPIO_NUM_26;
 
 #if !APP_MOTOR_ONLY
 const gpio_num_t kUltrasonicTrigPin = GPIO_NUM_21;
@@ -47,7 +40,9 @@ Lsm6ds3Imu imu(I2C_NUM_0, GPIO_NUM_12, GPIO_NUM_13);
 #endif
 
 At8236Motor motor_left(kMotorLeftIn1, kMotorLeftIn2);
-At8236Motor motor_right(kMotorRightIn1, kMotorRightIn2);
+// 按当前实物确认：原右轮正 PWM 导致后退且反馈为负。
+// 交换逻辑输入，使正速度命令驱动右轮前进；物理接线定义保持不变。
+At8236Motor motor_right(kMotorRightIn2, kMotorRightIn1);
 
 QuadratureEncoder encoder_left(kEncoderLeftA, kEncoderLeftB);
 QuadratureEncoder encoder_right(kEncoderRightA, kEncoderRightB);

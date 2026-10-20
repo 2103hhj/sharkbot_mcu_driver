@@ -8,7 +8,7 @@ Wi-Fi、micro-ROS、MAVLink、IMU、雷达、超声波、电池、灯、按键�
 
 ### Windows 编译、烧录、串口调试
 
-使用 ESP-IDF **5.5.3**（本机已有安装），目标为 **ESP32-S3 / 4 MB Flash**。普通 PowerShell 在工程根目录执行：
+使用 ESP-IDF **5.5.3**（本机已有安装），目标为普通 **ESP32 / 4 MB Flash**。普通 PowerShell 在工程根目录执行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/idf.ps1 -Action build
@@ -18,17 +18,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/idf.ps1 -Action mo
 
 将 `COM5` 换成设备管理器中的实际串口。脚本自动读取 EIM 已安装环境（默认 `C:\Espressif\tools`，可用 `-ToolsPath` 指定），
 也可从已激活的 ESP-IDF PowerShell 中运行。`ExecutionPolicy Bypass` 仅对本次进程生效。
-输出目录为 `build_windows/`，不复用旧 Linux 构建缓存。脚本还支持 `menuconfig`、`size` 和 `reconfigure`。
+输出目录为 `build_windows_esp32/`，脚本显式指定 `IDF_TARGET=esp32`，不复用旧 Linux 或 ESP32-S3 构建缓存。
+原 `build_windows/` 内的旧固件属于 ESP32-S3，不要用于当前芯片。脚本还支持 `menuconfig`、`size` 和 `reconfigure`。
 
 VS Code：`Ctrl+Shift+B` 构建；“终端 → 运行任务”选择 `Motor: Flash (Windows)` 或 `Motor: Monitor (Windows)`。
-这些任务自动加载环境；本机 ESP-IDF 插件的构建路径也已改为 `build_windows`。
+这些任务自动加载环境；本机 ESP-IDF 插件的构建路径也已改为 `build_windows_esp32`，目标为 `esp32`。
 `.clangd` 同样使用此目录的编译数据库；在其他电脑使用 ESP-IDF 插件按钮前，先选择该电脑的 Windows 安装。
 
-默认交互串口为 **UART0，230400 baud，8N1**：ESP32 TX=`GPIO43`、RX=`GPIO44`。
+默认交互串口为 **UART0，230400 baud，8N1**：ESP32 TX=`GPIO1`、RX=`GPIO3`。
 使用板载 USB 转串口，或连接 3.3 V USB-UART（TX/RX 交叉、共地）。
-原生 USB Serial/JTAG 若只是副控制台，仅能看日志；要通过它输入命令，需在 `menuconfig → Component config → ESP System Settings → Channel for console output`
-中将其设为主控制台，并重新编译烧录。默认输出 FireWater 曲线数据；发送 `vofa 0` 后可输入 `help` 查看命令。
-命令接收不显示提示符或字符回显，支持 CR、LF、CRLF 行结束；`Ctrl+]` 退出 IDF Monitor。
+普通 ESP32 使用 USB 转串口，不支持 ESP32-S3 的原生 USB Serial/JTAG 控制台。
+默认输出 FireWater 曲线数据；发送 `vofa 0` 后可输入 `help` 查看命令。
+命令接收不显示提示符或字符回显，支持 CR、LF、CRLF 行结束；VOFA+ 的发送行尾请选择 **`\r\n`（CRLF）**。
+只在发送框填写指令，行尾由 VOFA+ 自动追加；`Ctrl+]` 退出 IDF Monitor。
 
 ### VOFA+ / FireWater 速度曲线
 
@@ -48,9 +50,9 @@ speed:50.123,49.876
 数据由独立低优先级任务读取运动状态队列并发送，串口发送不阻塞电机控制任务。
 曲线模式会关闭普通 ESP 日志和命令成功回显；如需查看日志、帮助和完整状态，先发送 `vofa 0`，发送 `vofa 1` 恢复曲线。
 
-VOFA+ 发送区选择文本发送并添加换行。可发送 `motor 50 50`、`stop`、`pid 1 6 0`；
-查看持续速度响应时，将 `motor 50 50` 配置为每 **500 ms** 循环发送（每条命令均加换行）。
-未重复发送时，原有 **2 秒超时停车** 仍然生效，曲线会显示加速后停车。
+VOFA+ 发送区选择文本发送，行尾选择 **`\r\n`**。可发送 `motor 50 50`、`stop`、`pid 1 6 0`。
+要运行 **10 秒后自动停车**，关闭循环发送，单次发送 `motor 50 50` 即可。
+每次收到新的运动命令都会重新开始 10 秒计时；发送 `stop` 可提前停车。
 VOFA+ 与 IDF Monitor 不能同时打开同一 COM 口。
 
 ### 电机调试命令
@@ -75,7 +77,7 @@ pid 1 6 0
 | `pid <kp> <ki> <kd>` | 更新速度环 PID，各参数 0～1000；仅本次运行有效 |
 | `vofa 0` / `vofa 1` | 关闭 / 开启 FireWater 速度曲线输出，默认开启 |
 
-**最后一条运动命令超过 2 秒未更新会自动停车**；持续运动需在 2 秒内重复发送 `motor` 命令。
+**最后一条运动命令超过 10 秒未更新会自动停车**；单次发送即可运行 10 秒，若重复发送则从最新指令重新计时。
 `status`、`pid`、`help` 不会延长运动时间。非法数值、NaN、无穷大和越界输入会被拒绝。
 运动控制周期为 20 ms；电机模式不启动 IMU，航向由左右编码器推算。
 启动时仍会读取历史保存的速度 PID；不存在时使用 `kp=1、ki=6、kd=0`。
@@ -84,21 +86,27 @@ pid 1 6 0
 
 | 项目 | 当前值 |
 | --- | --- |
-| 左电机 IN1 / IN2 | GPIO16 / GPIO15 |
-| 右电机 IN1 / IN2 | GPIO46 / GPIO9 |
-| 左编码器 A / B | GPIO18 / GPIO17 |
-| 右编码器 A / B | GPIO11 / GPIO10 |
+| 左电机 IN1 / IN2 | GPIO23 / GPIO22 |
+| 右电机 IN1 / IN2 | GPIO12 / GPIO13 |
+| 左编码器 A / B | GPIO32 / GPIO33 |
+| 右编码器 A / B | GPIO25 / GPIO26 |
 | 轮径 / 轮距 | 65 mm / 175 mm |
 | 编码器每轮转计数 | 4680（四倍频后的计数） |
 
 接线在 `main/platform/board.cpp`，机械参数与编码器方向在 `main/control/motion_controller.cpp`。
-这些值保持现有源码配置，请按实际电机、减速比和安装方向校准。
+引脚按当前提供的接线配置；机械参数和编码器方向保持原值，请按实际电机、减速比和安装方向校准。
+按实物反馈（CH0 正常、CH1 为负且右轮后退），右电机对象已交换逻辑 IN1/IN2，修正右轮输出极性；
+上表仍表示实际接线，编码器系数保持“左 -1、右 +1”。重新烧录后先将车轮悬空，分别测试 `motor 50 0`、`motor 0 50`，
+确认对应轮子向车体前进方向转动，且对应反馈为正；再测试 `motor 50 50`。
+GPIO12 是 ESP32 的启动配置引脚，上电/复位时的电平会影响 Flash 供电电压选择；外接电机驱动不能破坏具体模块要求的启动电平，
+详见 [Espressif GPIO12 启动配置说明](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/sd_pullup_requirements.html#conflicts-between-bootstrapping-and-sdio-on-dat2)。
 
 ### 恢复完整功能
 
 在已激活的 ESP-IDF 环境中，用独立目录执行 `idf.py -B build_full -DSHARKBOT_MOTOR_ONLY=OFF build`。
 这会恢复原有源码清单、外设及任务，并启用原组件依赖；需要先补齐 `main/idf_component.yml` 中原有的 micro-ROS 本地组件及相关依赖，
-并恢复 `sdkconfig.defaults` 末尾注释的网络配置。完整固件的 micro-ROS 构建流程不属于本次 Windows 电机调试验证范围。
+并恢复 `sdkconfig.defaults` 末尾注释的网络配置。原完整固件中的非电机外设引脚仍是历史 S3 定义，不能直接用于普通 ESP32，需另行适配。
+完整固件的 micro-ROS 构建流程不属于本次 Windows 电机调试验证范围。
 
 ## 原完整固件说明（当前暂时禁用）
 

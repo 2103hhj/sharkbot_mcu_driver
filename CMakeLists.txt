@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
+set(IDF_TARGET "esp32" CACHE STRING "Target MCU for the current motor board")
+
 option(SHARKBOT_MOTOR_ONLY "Build only motor control and the serial debug console" ON)
 if(SHARKBOT_MOTOR_ONLY)
     # Keep the original manifest and peripheral components for later restoration.
